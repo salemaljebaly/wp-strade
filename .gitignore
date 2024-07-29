@@ -32,3 +32,4 @@ wp-cli.local.yml
 !web/app/plugins/lamah-excel-export
 !web/app/plugins/lamah-media-sync
 !web/app/plugins/lamah-code-snippets
+!web/app/themes/strade-redirect
