@@ -7,7 +7,7 @@
 /*
 Plugin Name: Export Orders-Products in Excel Sheet
 Description: Enables you to export a list of products as rows and customer orders as columns in a streamlined manner, consolidating the relevant data into a single Excel file.
-Version:     1.1
+Version:     2.0
 Author:      Lamah Dev
 Author URI:  http://lamah.com
 License: GPLv2 or later

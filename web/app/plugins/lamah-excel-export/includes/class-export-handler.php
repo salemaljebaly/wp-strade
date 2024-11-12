@@ -4,49 +4,52 @@ if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly
 }
 
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+
 class Export_Handler
 {
+    const EXPORT_FILE_PREFIX = 'orders-';
+    const EXPORT_STATUS_OPTION = 'lamah-export-status';
+    const EXPORT_PATH_OPTION = 'lamah-export-path';
+
     public static function start_order_export()
     {
-        update_option('lamah-export-status', 'loading');
-        self::delete_xlsx_files();
-
-        global $wpdb;
-        $query = "SELECT product_qty, order_id, product_id FROM {$wpdb->prefix}wc_order_product_lookup;";
-        $output = $wpdb->get_results($query);
-
-        $product_qtys = [];
-        $order_ids = [];
-        $product_ids = [];
-
-        foreach ($output as $out) {
-            $product_qtys[] = $out->product_qty;
-            $order_ids[] = $out->order_id;
-            $product_ids[] = $out->product_id;
+        // Verify AJAX nonce
+        if (!check_ajax_referer('my-ajax-request-nonce', 'security', false)) {
+            wp_send_json(['status' => false, 'message' => 'Nonce verification failed.']);
+            return;
         }
 
-        $products = wc_get_products(['limit' => -1, 'status' => 'publish', 'return' => 'ids']);
-        $orders = wc_get_orders(['limit' => -1, 'status' => ['processing', 'completed'], 'return' => 'ids']);
+        // Update export status and delete previous files
+        update_option(self::EXPORT_STATUS_OPTION, 'loading');
+        self::delete_xlsx_files();
 
+        // Fetch products and orders
+        $products = wc_get_products(['limit' => -1, 'status' => 'publish', 'return' => 'ids']);
+        $order_ids = wc_get_orders(['limit' => -1, 'status' => ['processing', 'completed'], 'return' => 'ids']);
+
+        // Define header columns
         $table_columns = ["Name", "Categories", "ImageURL", "ImageType", "Pice", "SKU", "Regular Price", "Single Price", "Total Sales"];
-        foreach ($orders as $order) {
-            $order = wc_get_order($order);
+        foreach ($order_ids as $order_id) {
+            $order = wc_get_order($order_id);
             $col = $order->get_formatted_billing_full_name();
             $table_columns[] = $col;
         }
-
+        // Initialize spreadsheet
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $column = 1;
-        foreach ($table_columns as $field) {
-            $coordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($column) . 1;
-            $sheet->getCell($coordinate)->setValue($field);
-            $column++;
+
+        // Set header row
+        foreach ($table_columns as $columnIndex => $field) {
+            $sheet->setCellValue([$columnIndex + 1, 1], $field);
         }
 
         $excel_row = 2;
         foreach ($products as $product_id) {
             $product = wc_get_product($product_id);
+
+            // Gather product data
             $data = [
                 $product->get_name(),
                 strip_tags(wc_get_product_category_list($product_id)),
@@ -56,57 +59,60 @@ class Export_Handler
                 $product->get_sku(),
                 $product->get_regular_price(),
                 get_post_meta($product_id, 'singleprice', true),
-                self::get_total_sales($orders, $product_id)
+                self::get_total_sales($order_ids, $product_id),
             ];
 
+            // Fill in product data
+            foreach ($data as $columnIndex => $value) {
+                $sheet->setCellValue([$columnIndex + 1, $excel_row], $value);
+            }
+
+            // Add quantity data for each order
             $col_index = 10;
-            foreach ($orders as $order_id) {
-                $coordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col_index) . $excel_row;
-                $order = wc_get_order($order_id);
-                $total_sold = self::get_total_sold($order_ids, $product_ids, $product_qtys, $order->get_id(), $product_id);
-                $sheet->getCell($coordinate)->setValue($total_sold);
+            foreach ($order_ids as $order_id) {
+                $total_sold = self::get_total_sold($order_id, $product_id);
+                $sheet->setCellValue([$col_index, $excel_row], $total_sold);
                 $col_index++;
             }
 
-            $row_index = 1;
-            foreach ($data as $value) {
-                $sheet->getCellByColumnAndRow($row_index++, $excel_row)->setValue($value);
-            }
             $excel_row++;
         }
 
+        // Save spreadsheet to file
         $uploads = wp_upload_dir();
-        $fileName = 'orders-' . date('YmdHis') . '.xlsx';
+        $fileName = self::EXPORT_FILE_PREFIX . date('YmdHis') . '.xlsx';
         $filePath = $uploads['path'] . '/' . $fileName;
         $writer = new Xlsx($spreadsheet);
         $writer->save($filePath);
 
+        // Update option with the file path
         $download_url = $uploads['url'] . '/' . $fileName;
-        update_option('lamah-export-path', $download_url);
-        update_option('lamah-export-status', 'complete');
+        update_option(self::EXPORT_PATH_OPTION, $download_url);
+        update_option(self::EXPORT_STATUS_OPTION, 'complete');
 
         wp_send_json(['status' => true, 'downloadPath' => $download_url]);
     }
 
-    private static function get_total_sales($orders, $product_id)
+    private static function get_total_sales($order_ids, $product_id)
     {
         $total_sales = 0;
-        foreach ($orders as $order_id) {
+        foreach ($order_ids as $order_id) {
             $order = wc_get_order($order_id);
             foreach ($order->get_items() as $item) {
-                if ($item['product_id'] == $product_id) {
-                    $total_sales += $item['qty'];
+                if ($item->get_product_id() == $product_id) {
+                    $total_sales += $item->get_quantity();
                 }
             }
         }
-        return (string)$total_sales === '0' ? '' : (string)$total_sales;
+        return $total_sales === 0 ? '' : (string)$total_sales;
     }
 
-    private static function get_total_sold($order_ids, $product_ids, $product_qtys, $order_id, $product_id)
+    private static function get_total_sold($order_id, $product_id)
     {
-        for ($i = 0; $i < count($product_qtys); $i++) {
-            if ($order_ids[$i] == $order_id && $product_ids[$i] == $product_id) {
-                return $product_qtys[$i];
+        $order = wc_get_order($order_id);
+        foreach ($order->get_items() as $item) {
+            if ($item->get_product_id() == $product_id) {
+                return $item->get_quantity();
             }
         }
         return '';
@@ -114,20 +120,21 @@ class Export_Handler
 
     public static function download_export()
     {
-        wp_send_json(['downloadPath' => get_option('lamah-export-path')]);
+        if (!check_ajax_referer('my-ajax-request-nonce', 'security', false)) {
+            wp_send_json(['status' => false, 'message' => 'Nonce verification failed.']);
+            return;
+        }
+        wp_send_json(['downloadPath' => get_option(self::EXPORT_PATH_OPTION)]);
     }
 
     public static function delete_xlsx_files()
     {
         $uploads = wp_upload_dir();
-        $files = glob($uploads['path'] . '/orders*.xlsx');
-        if ($files) {
-            foreach ($files as $file) {
-                if (is_file($file)) {
-                    unlink($file);
-                }
+        $files = glob($uploads['path'] . '/' . self::EXPORT_FILE_PREFIX . '*.xlsx');
+        foreach ($files as $file) {
+            if (is_file($file)) {
+                unlink($file);
             }
         }
     }
 }
-

@@ -37,7 +37,7 @@
     "oscarotero/env": "^2.1",
     "roots/bedrock-autoloader": "^1.0",
     "roots/bedrock-disallow-indexing": "^2.0",
-    "roots/wordpress": "6.6.1",
+    "roots/wordpress": "6.6.2",
     "roots/wp-config": "1.0.0",
     "roots/wp-password-bcrypt": "1.1.0",
     "wpackagist-theme/twentytwentyfour": "^1.0",
@@ -46,7 +46,8 @@
     "wpackagist-plugin/cart-rest-api-for-woocommerce": "^4.2",
     "wpackagist-plugin/delete-all-products": "^1.0",
     "wpackagist-plugin/online-active-users": "^2.2",
-    "wpackagist-plugin/woocommerce": "^9.1"
+    "wpackagist-plugin/woocommerce": "^9.1",
+    "phpoffice/phpspreadsheet": "3.4.0"
   },
   "require-dev": {
     "squizlabs/php_codesniffer": "^3.7.1",
