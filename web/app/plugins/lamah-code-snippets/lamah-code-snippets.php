@@ -55,23 +55,6 @@ add_action('woocommerce_review_order_before_order_total', 'display_custom_total'
 
 /**************************************************** */
 
-// Redirect suspended user
-
-function redirect_suspended_user()
-{
-    $current_user = wp_get_current_user();
-    $url = 'https://strade.ly/suspend.html';
-    if ($current_user->exists()) {
-        if (current_user_can('suspended')) {
-            wp_redirect($url);
-            exit();
-        }
-    }
-}
-add_action('template_redirect', 'redirect_suspended_user');
-
-/**************************************************** */
-
 // Show meta data
 
 /**
