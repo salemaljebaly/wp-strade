@@ -25,4 +25,3 @@ require_once EXPORT_PLUGIN_PATH . 'includes/class-export-plugin.php';
 
 // Initialize the plugin
 Export_Plugin::get_instance();
-

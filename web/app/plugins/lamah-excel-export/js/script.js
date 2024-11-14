@@ -24,8 +24,7 @@ jQuery(document).ready(function ($) {
                 replaceButtonWithText('#l-bt-1', 'جاري التصدير ..');
             },
             success: function (response) {
-                if (response.success) {
-                    // Update the export button with the download button
+                if (response.status) { 
                     $('#custom-export-button-wrapper').html('<button id="l-bt-2" style="height:32px; color: #ffffff; background: #75B214; border-color: #75B214;" class="button">Download Export</button>');
                 } else {
                     alert('Export failed. Please try again.');
